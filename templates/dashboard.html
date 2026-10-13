@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Tiles Detection FYP2</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+<style>
+:root{
+  --bg:#07090f; --s1:#0d1117; --s2:#161b27; --s3:#1c2333;
+  --border:#21293d; --accent:#00d9ff; --purple:#a855f7;
+  --gold:#f59e0b; --pass:#22c55e; --fail:#ef4444;
+  --warn:#f59e0b; --text:#dde4f0; --muted:#4b5a7a;
+  --mono:'JetBrains Mono',monospace; --sans:'Outfit',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+
+.top{height:56px;background:rgba(7,9,15,.95);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);display:flex;align-items:center;
+  justify-content:space-between;padding:0 1.5rem;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--mono);font-size:.9rem;font-weight:700;color:var(--accent);
+  display:flex;align-items:center;gap:8px;letter-spacing:.12em}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);
+  animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(0,217,255,.5)}50%{box-shadow:0 0 0 8px rgba(0,217,255,0)}}
+.top-right{display:flex;align-items:center;gap:.75rem}
+.cam-pill{font-family:var(--mono);font-size:.65rem;padding:3px 10px;border-radius:20px;
+  border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;gap:5px}
+.cam-pill.live{color:var(--pass);border-color:var(--pass)}
+.cam-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+.layout{display:grid;grid-template-columns:1fr 340px 300px;gap:1rem;
+  padding:1rem 1.5rem;max-width:1700px;margin:0 auto}
+
+.card{background:var(--s1);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.ch{padding:.75rem 1rem;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between}
+.ct{font-family:var(--mono);font-size:.65rem;color:var(--muted);
+  letter-spacing:.1em;text-transform:uppercase}
+.cb{padding:1rem}
+
+.cam-wrap{position:relative;background:#000;aspect-ratio:4/3;overflow:hidden;
+  display:flex;align-items:center;justify-content:center}
+.cam-wrap img{width:100%;height:100%;object-fit:cover;display:block}
+.cam-overlay{position:absolute;inset:0;border:1px solid rgba(0,217,255,.15);pointer-events:none}
+.scan{position:absolute;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  animation:scan 2.5s linear infinite;opacity:.4}
+@keyframes scan{0%{top:0}100%{top:100%}}
+.cam-off{color:var(--muted);font-family:var(--mono);font-size:.7rem;text-align:center}
+.cam-off svg{opacity:.25;margin-bottom:.75rem}
+
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:.4rem;padding:.75rem}
+.tab{padding:7px 4px;border-radius:7px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);font-family:var(--mono);font-size:.62rem;
+  cursor:pointer;transition:all .2s;text-align:center;letter-spacing:.04em}
+.tab:hover{border-color:var(--accent);color:var(--text)}
+.tab.active.m-c{background:rgba(0,217,255,.1);border-color:var(--accent);color:var(--accent)}
+.tab.active.m-s{background:rgba(168,85,247,.1);border-color:var(--purple);color:var(--purple)}
+.tab.active.m-o{background:rgba(59,130,246,.1);border-color:#3b82f6;color:#3b82f6}
+.tab.active.m-e{background:rgba(245,158,11,.1);border-color:var(--gold);color:var(--gold)}
+.tab.active.m-f{background:rgba(34,197,94,.1);border-color:var(--pass);color:var(--pass)}
+
+.controls{padding:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;border-top:1px solid var(--border)}
+.btn{padding:8px 16px;border-radius:7px;font-family:var(--mono);font-size:.7rem;
+  letter-spacing:.05em;cursor:pointer;border:1px solid var(--border);
+  transition:all .2s;display:inline-flex;align-items:center;gap:5px;font-weight:700}
+.btn-p{background:var(--accent);color:#000;border-color:var(--accent)}
+.btn-p:hover{background:#00b0cc}
+.btn-s{background:transparent;color:var(--text)}
+.btn-s:hover{border-color:var(--accent);color:var(--accent)}
+.btn-r{background:rgba(239,68,68,.15);color:var(--fail);border-color:var(--fail)}
+.btn-r:hover{background:rgba(239,68,68,.25)}
+.btn-g{background:rgba(34,197,94,.15);color:var(--pass);border-color:var(--pass)}
+.btn-g:hover{background:rgba(34,197,94,.25)}
+.btn-cal{background:rgba(245,158,11,.15);color:var(--gold);border-color:var(--gold)}
+.btn-cal:hover{background:rgba(245,158,11,.25)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-lg{padding:11px 20px;font-size:.78rem}
+
+.status-block{padding:1.5rem;text-align:center;border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+.status-block::before{content:'';position:absolute;inset:0;opacity:.04;transition:background .4s}
+.status-block.pass::before{background:var(--pass)}
+.status-block.fail::before{background:var(--fail)}
+.sbadge{font-family:var(--mono);font-size:1.8rem;font-weight:700;letter-spacing:.2em;
+  padding:10px 28px;border-radius:8px;border:2px solid var(--border);color:var(--muted);
+  display:inline-block;transition:all .4s}
+.sbadge.pass{color:var(--pass);border-color:var(--pass);text-shadow:0 0 20px rgba(34,197,94,.4)}
+.sbadge.fail{color:var(--fail);border-color:var(--fail);text-shadow:0 0 20px rgba(239,68,68,.4)}
+.smethod{margin-top:.4rem;font-size:.7rem;color:var(--muted);font-family:var(--mono)}
+
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;padding:.75rem;border-bottom:1px solid var(--border)}
+.metric{background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:.75rem}
+.mlabel{font-family:var(--mono);font-size:.58rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.mval{font-family:var(--mono);font-size:1.1rem;font-weight:700}
+.munit{font-size:.6rem;color:var(--muted)}
+.mval.ok{color:var(--pass)} .mval.bad{color:var(--fail)}
+
+.rimg-wrap{padding:.75rem;border-bottom:1px solid var(--border); cursor:pointer}
+.rimg-wrap img{width:100%;border-radius:7px;border:1px solid var(--border);display:none}
+.rimg-ph{aspect-ratio:4/3;background:var(--s2);border:1px dashed var(--border);border-radius:7px;
+  display:flex;align-items:center;justify-content:center;color:var(--muted);font-family:var(--mono);font-size:.65rem}
+
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;padding:.75rem}
+.sbox{text-align:center;background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:.6rem}
+.snum{font-family:var(--mono);font-size:1.4rem;font-weight:700}
+.snum.p{color:var(--pass)} .snum.f{color:var(--fail)}
+.slbl{font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-top:2px}
+
+.compare-block{padding:.75rem;display:none;border-bottom:1px solid var(--border)}
+.compare-block.show{display:block}
+.compare-title{font-family:var(--mono);font-size:.65rem;color:var(--accent);margin-bottom:.5rem;letter-spacing:.08em}
+.compare-row{display:flex;justify-content:space-between;align-items:center;
+  padding:5px 0;border-bottom:1px solid rgba(33,41,61,.5)}
+.compare-row:last-child{border:none}
+.clabel{font-family:var(--mono);font-size:.62rem;color:var(--muted)}
+.cval{font-family:var(--mono);font-size:.72rem;font-weight:700}
+.agree{color:var(--pass)} .disagree{color:var(--fail)}
+
+.tile-grid{padding:.75rem;display:grid;grid-template-columns:1fr 1fr;gap:.5rem;
+  max-height:320px;overflow-y:auto}
+.tile-grid::-webkit-scrollbar{width:3px}
+.tile-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.tile-card{background:var(--s2);border:1px solid var(--border);border-radius:7px;padding:.6rem;
+  transition:border-color .2s;cursor:default}
+.tile-card.pass{border-color:rgba(34,197,94,.4)}
+.tile-card.fail{border-color:rgba(239,68,68,.4)}
+.tile-card.unknown{border-color:var(--border)}
+.tile-id{font-family:var(--mono);font-size:.65rem;font-weight:700;color:var(--muted);margin-bottom:4px}
+.tile-status{font-family:var(--mono);font-size:.75rem;font-weight:700}
+.tile-status.pass{color:var(--pass)} .tile-status.fail{color:var(--fail)}
+.tile-detail{font-family:var(--mono);font-size:.58rem;color:var(--muted);margin-top:3px}
+.tile-ph{padding:1.5rem;text-align:center;color:var(--muted);font-family:var(--mono);font-size:.65rem}
+
+.robot-panel{display:flex;flex-direction:column;gap:0}
+.robot-status{padding:.75rem;border-bottom:1px solid var(--border)}
+.robot-ind{display:flex;align-items:center;gap:8px;margin-bottom:.6rem}
+.robot-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);transition:background .3s}
+.robot-dot.active{background:var(--pass);animation:pulse 1.5s infinite}
+.robot-label{font-family:var(--mono);font-size:.7rem;font-weight:700}
+.robot-count{font-family:var(--mono);font-size:.65rem;color:var(--muted);margin-top:2px}
+.robot-cfg{padding:.75rem;border-bottom:1px solid var(--border)}
+.form-row{display:flex;flex-direction:column;gap:4px;margin-bottom:.6rem}
+.form-label{font-family:var(--mono);font-size:.62rem;color:var(--muted);letter-spacing:.06em}
+select,input[type=number],input[type=text]{
+  width:100%;padding:7px 10px;background:var(--s2);border:1px solid var(--border);
+  border-radius:6px;color:var(--text);font-family:var(--mono);font-size:.75rem}
+select:focus,input:focus{outline:none;border-color:var(--accent)}
+.robot-btns{padding:.75rem;display:flex;gap:.5rem;flex-wrap:wrap;}
+.robot-note{padding:.5rem .75rem;font-family:var(--mono);font-size:.6rem;
+  color:var(--muted);border-top:1px solid var(--border);line-height:1.5}
+
+.hist-scroll{max-height:220px;overflow-y:auto}
+.hist-scroll::-webkit-scrollbar{width:3px}
+.hist-scroll::-webkit-scrollbar-thumb{background:var(--border)}
+table{width:100%;border-collapse:collapse}
+th{padding:6px 10px;font-family:var(--mono);font-size:.58rem;color:var(--muted);
+  letter-spacing:.08em;text-align:left;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--s1)}
+td{padding:5px 10px;font-size:.7rem;border-bottom:1px solid rgba(33,41,61,.4);font-family:var(--mono)}
+tr{cursor:pointer; transition:background .2s;}
+tr:hover td{background:var(--s2)}
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:.6rem;font-weight:700}
+.badge.pass{background:rgba(34,197,94,.15);color:var(--pass)}
+.badge.fail{background:rgba(239,68,68,.15);color:var(--fail)}
+
+.modal-bg{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.75);
+  backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--s1);border:2px solid var(--border);border-radius:10px;
+  padding:1.5rem;max-width:450px;width:90%}
+.modal h3{font-family:var(--mono);color:var(--accent);margin-bottom:1rem;font-size:.9rem}
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:1rem}
+.fg label{font-family:var(--mono);font-size:.65rem;color:var(--muted);letter-spacing:.08em}
+.modal-btns{display:flex;gap:.5rem;margin-top:1.5rem}
+.modal-btns .btn{flex:1}
+
+.toasts{position:fixed;bottom:1.5rem;right:1.5rem;display:flex;flex-direction:column;gap:.5rem;z-index:300}
+.toast{background:var(--s1);border:1px solid var(--border);border-radius:7px;
+  padding:.75rem 1rem;font-family:var(--mono);font-size:.7rem;box-shadow:0 4px 12px rgba(0,0,0,.5);
+  animation:slideIn .2s ease}
+@keyframes slideIn{from{transform:translateX(400px);opacity:0}to{transform:translateX(0);opacity:1}}
+.toast.pass{border-color:var(--pass);background:rgba(34,197,94,.1);color:var(--pass)}
+.toast.fail{border-color:var(--fail);background:rgba(239,68,68,.1);color:var(--fail)}
+
+.spin{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .6s linear infinite;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo"><div class="pulse"></div>TILES DETECTION FYP2</div>
+  <div class="top-right">
+    <div class="cam-pill" id="camPill"><div class="cam-dot"></div><span id="camTxt">OFFLINE</span></div>
+    <button class="btn btn-s" onclick="openSettings()">SETTINGS</button>
+  </div>
+</div>
+
+<div class="layout">
+
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <div class="card">
+      <div class="ch">
+        <span class="ct"> Live Camera</span>
+        <div class="spin" id="spin"></div>
+      </div>
+
+      <div class="tabs" style="grid-template-columns: repeat(3, 1fr);">
+        <button class="tab m-c active" onclick="setMethod('centroid', this)">CENTROID</button>
+        <button class="tab m-s" onclick="setMethod('skeleton', this)">SKELETON</button>
+        <button class="tab m-e" onclick="setMethod('edge', this)">EDGE DEV</button>
+      </div>
+
+      <div class="cam-wrap" id="camWrap">
+        <img id="camFeed" src="/video_feed" onload="camOk()" onerror="camErr()"/>
+        <div class="cam-overlay"><div class="scan"></div></div>
+        <div class="cam-off" id="camOff" style="display:none">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+          <p>Camera offline</p><p style="font-size:.6rem;margin-top:3px">Set DroidCam URL in  Settings</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="btn btn-p btn-lg" id="mainBtn" onclick="captureDetect()">▶ CAPTURE &amp; ANALYSE</button>
+        <button class="btn btn-s" onclick="captureOnly()"> CAPTURE</button>
+        <input type="file" id="uploadInput" accept="image/*" style="display:none" onchange="uploadPhoto(event)">
+        <button class="btn btn-s" onclick="document.getElementById('uploadInput').click()"> UPLOAD</button>
+
+        <button class="btn btn-s" onclick="generateMap('grid')" style="border-color: var(--gold); color: var(--gold);"> GRID MAP</button>
+        <button class="btn btn-p" onclick="generateMap('analysis')"
+        style="border-color: var(--purple); color: var(--purple); background: rgba(168,85,247,.1);">
+         INSPECTION MAP
+        </button>
+        <button class="btn btn-primary" onclick="runFullGridAnalysis()" style="background: #8b5cf6;">
+             GENERATE ANALYSIS GRID
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch">
+        <span class="ct"> Inspection History</span>
+        <button class="btn btn-r" style="padding:3px 8px;font-size:.6rem" onclick="clearHist()">CLEAR</button>
+      </div>
+      <div class="hist-scroll">
+        <table>
+          <thead><tr><th>#</th><th>TIME</th><th>METHOD</th><th>STATUS</th><th>DEV(mm)</th><th>W(mm)</th><th>TILES</th><th>SRC</th></tr></thead>
+          <tbody id="histBody"><tr><td colspan="8" style="color:var(--muted);text-align:center;padding:1.5rem">No inspections yet</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="card" style="display:flex;flex-direction:column">
+
+    <div class="ch"><span class="ct"> Analysis Result</span></div>
+
+    <div class="status-block" id="statusBlock">
+      <div class="sbadge" id="sbadge">READY</div>
+      <div class="smethod" id="smethod">select method → capture → analyse</div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="mlabel">ALIGN DEV</div>
+        <div class="mval" id="mDev">—</div><div class="munit">mm</div></div>
+      <div class="metric"><div class="mlabel">JOINT WIDTH</div>
+        <div class="mval" id="mWid">—</div><div class="munit">mm</div></div>
+      <div class="metric"><div class="mlabel">WIDTH STD</div>
+        <div class="mval" id="mStd">—</div><div class="munit">mm</div></div>
+      <div class="metric"><div class="mlabel">TILES</div>
+        <div class="mval" id="mTiles">—</div><div class="munit">detected</div></div>
+    </div>
+
+    <div class="compare-block" id="compareBlock">
+      <div class="compare-title">▸ ALIGNMENT COMPARISON</div>
+      <div class="compare-row">
+        <span class="clabel">Centroid deviation</span>
+        <span class="cval" id="cmpCentroid">—</span>
+      </div>
+      <div class="compare-row">
+        <span class="clabel">Skeleton deviation</span>
+        <span class="cval" id="cmpSkeleton">—</span>
+      </div>
+      <div class="compare-row">
+        <span class="clabel">Methods agree?</span>
+        <span class="cval" id="cmpAgree">—</span>
+      </div>
+    </div>
+
+    <div class="rimg-wrap" onclick="openImage()">
+      <div class="rimg-ph" id="rimgPh">Analysis result will appear here</div>
+      <img id="rimg" alt="Result"/>
+    </div>
+
+    <div class="stats-row">
+      <div class="sbox"><div class="snum" id="stTotal">0</div><div class="slbl">TOTAL</div></div>
+      <div class="sbox"><div class="snum p" id="stPass">0</div><div class="slbl">PASS</div></div>
+      <div class="sbox"><div class="snum f" id="stFail">0</div><div class="slbl">FAIL</div></div>
+    </div>
+
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <div class="card">
+      <div class="ch">
+        <span class="ct"> Individual Tiles</span>
+        <span id="tileCount" style="font-family:var(--mono);font-size:.62rem;color:var(--muted)">0 tiles</span>
+      </div>
+      <div class="tile-grid" id="tileGrid">
+        <div class="tile-ph" style="grid-column:1/-1">Run analysis to see tile results</div>
+      </div>
+    </div>
+
+    <div class="card robot-panel">
+      <div class="ch"><span class="ct"> Robot Control</span></div>
+
+      <div class="robot-status">
+        <div class="robot-ind">
+          <div class="robot-dot" id="roboDot"></div>
+          <span class="robot-label" id="roboLabel">IDLE</span>
+        </div>
+        <div class="robot-count" id="roboCount">Mapped: 0 Photos</div>
+      </div>
+
+
+      <div class="robot-btns">
+        <select id="gridSizeSelector" class="form-select" style="display:inline-block; width:auto;">
+          <option value="3">3x3 Grid</option>
+          <option value="4">4x4 Grid</option>
+          <option value="5">5x5 Grid</option>
+        </select>
+        <button class="btn btn-g" id="roboStart" onclick="sendRobotCommand('start')" style="flex:1;">▶ START AUTO</button>
+        <button class="btn btn-r" id="roboStop" onclick="sendRobotCommand('stop')" style="flex:1;">■ STOP</button>
+        <button class="btn btn-cal" id="roboCalibrate" onclick="calibrateCompass()" style="width:100%;"> CALIBRATE COMPASS</button>
+      </div>
+      <div class="robot-cfg" style="display:flex; gap:5px; flex-wrap:wrap; background: var(--s2);">
+        <div style="flex:1"><label class="form-label">R-Side(°)</label><input type="number" id="angR1" value="95"></div>
+        <div style="flex:1"><label class="form-label">R-Down(°)</label><input type="number" id="angR2" value="190"></div>
+        <div style="flex:1"><label class="form-label">L-Side(°)</label><input type="number" id="angL1" value="100"></div>
+        <div style="flex:1"><label class="form-label">L-Up(°)</label><input type="number" id="angL2" value="10"></div>
+      </div>
+      <div style="border: 2px solid #ccc; padding: 15px; width: 250px; border-radius: 8px; font-family: monospace;">
+          <h3 style="margin-top: 0;"> Compass Live</h3>
+          <p><strong>X:</strong> <span id="tele_x">0</span></p>
+          <p><strong>Y:</strong> <span id="tele_y">0</span></p>
+          <p><strong>Heading:</strong> <span id="tele_h">0</span>°</p>
+          <p><strong>Target:</strong> <span id="tele_t">0</span>°</p>
+      </div>
+      <div class="robot-note" id="robotNote">
+         Motion 2350 Pro Bluetooth Active
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <h3> System Settings</h3>
+    <div class="fg"><label>DROIDCAM URL</label>
+      <input type="text" id="inputUrl" placeholder="http://camera-host:4747/video"/></div>
+    <div class="modal-btns">
+      <button class="btn btn-p" onclick="saveSettings()">SAVE & RECONNECT</button>
+      <button class="btn btn-s" onclick="closeSettings()">CANCEL</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="imageViewerModal" onclick="closeImage(event)">
+  <img id="largeImage" style="max-width:95vw; max-height:95vh; border-radius:8px; border:2px solid var(--border);">
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+const socket = io();
+let activeMethod = 'centroid';
+let histData = [];
+
+socket.on('new_result', d => {
+  updateResult(d);
+  loadStats();
+  loadHistory();
+  showToast(d.status==='PASS'?'pass':'fail',
+    `${d.method} → ${d.status} | Dev:${d.deviation??'—'}mm`);
+});
+
+socket.on('stats_update', d => updateStats(d));
+
+socket.on('robot_status', d => updateRobotUI(d));
+
+socket.on('new_capture', d => {
+  showToast('', ` Photo Captured: R${d.row}C${d.col}`);
+  document.getElementById('roboCount').textContent = `Mapped: ${d.row * 3 + d.col + 1} Photos`;
+});
+
+socket.on('grid_complete', d => {
+  showToast('pass', d.message);
+});
+
+// Compass Calibration WebSocket Handlers
+socket.on('calibration_status', d => {
+  const noteEl = document.getElementById('robotNote');
+  if (d.status === 'started') {
+    noteEl.textContent = ` ${d.message}`;
+    noteEl.style.color = 'var(--gold)';
+    showToast('', d.message);
+  } else if (d.status === 'done') {
+    noteEl.textContent = ` ${d.message}`;
+    noteEl.style.color = 'var(--pass)';
+    showToast('pass', d.message);
+
+    // Reset back to normal after 3 seconds
+    setTimeout(() => {
+      noteEl.textContent = ' Motion 2350 Pro Bluetooth Active';
+      noteEl.style.color = '';
+    }, 3000);
+  }
+});
+
+socket.on('bluetooth_status', d => {
+  const noteEl = document.getElementById('robotNote');
+  if (d.connected) {
+    noteEl.textContent = ' Bluetooth Connected';
+    noteEl.style.color = 'var(--pass)';
+  } else {
+    noteEl.textContent = ' Bluetooth Disconnected';
+    noteEl.style.color = 'var(--fail)';
+  }
+});
+
+function camOk(){
+  document.getElementById('camFeed').style.display='block';
+  document.getElementById('camOff').style.display='none';
+  document.getElementById('camPill').classList.add('live');
+  document.getElementById('camTxt').textContent='LIVE';
+}
+function camErr(){
+  document.getElementById('camFeed').style.display='none';
+  document.getElementById('camOff').style.display='flex';
+  document.getElementById('camPill').classList.remove('live');
+  document.getElementById('camTxt').textContent='OFFLINE';
+}
+
+function setMethod(m,el){
+  activeMethod=m;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+async function captureDetect(){
+  setLoading(true);
+  try{
+    const r=await fetch('/api/capture_and_detect',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({method:activeMethod})
+    });
+    const d=await r.json();
+    if(d.error){showToast('fail',d.error)}else{updateResult(d);loadHistory();loadStats()}
+  }catch(e){showToast('fail','Analysis error')}
+  setLoading(false);
+}
+
+async function captureOnly(){
+  try{
+    const r=await fetch('/api/capture',{method:'POST'});
+    const d=await r.json();
+    showToast('','Photo captured');
+  }catch(e){showToast('fail','Capture failed')}
+}
+
+
+async function uploadPhoto(e){
+  const file=e.target.files[0];
+  if(!file)return;
+  const fd=new FormData();fd.append('file',file);fd.append('method',activeMethod);
+  setLoading(true);
+  try{
+    const r=await fetch('/api/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.error){showToast('fail',d.error)}else{updateResult(d);loadHistory();loadStats()}
+  }catch(e){showToast('fail','Upload error')}
+  setLoading(false);
+}
+
+let selectedImagePath = null;
+
+// LIVE TELEMETRY HANDLER
+socket.on('update_telemetry', function(msg) {
+    // Update the numbers
+    document.getElementById('tele_x').innerText = msg.x;
+    document.getElementById('tele_y').innerText = msg.y;
+    document.getElementById('tele_h').innerText = msg.heading;
+    document.getElementById('tele_t').innerText = msg.target;
+
+    // Visual Feedback: Red text if robot drifts more than 8 degrees
+    let error = Math.abs(parseInt(msg.target) - parseInt(msg.heading));
+    if (error > 180) error = 360 - error; // Normalize for circular math
+
+    const headEl = document.getElementById('tele_h');
+    if (error > 8) {
+        headEl.style.color = "var(--fail)"; // Turns Red
+    } else {
+        headEl.style.color = "var(--accent)"; // Back to Blue
+    }
+});
+
+function updateResult(d){
+  const sb=document.getElementById('statusBlock');
+  const badge=document.getElementById('sbadge');
+  const meth=document.getElementById('smethod');
+
+  sb.className='status-block '+(d.status==='PASS'?'pass':'fail');
+  badge.className='sbadge '+(d.status==='PASS'?'pass':'fail');
+  badge.textContent=d.status||'—';
+  meth.textContent=d.method||'—';
+
+  document.getElementById('mDev').textContent=(d.deviation?.toFixed(2))||'—';
+  document.getElementById('mDev').className='mval '+((d.deviation<5)?'ok':'bad');
+  document.getElementById('mWid').textContent=(d.width?.toFixed(2))||'—';
+  document.getElementById('mStd').textContent=(d.width_std?.toFixed(2))||'—';
+  document.getElementById('mTiles').textContent=d.tiles||'—';
+
+  if(d.result_path){
+    const img=document.getElementById('rimg');
+    img.src=d.result_path+'?t='+Date.now();
+    img.style.display='block';
+    document.getElementById('rimgPh').style.display='none';
+    selectedImagePath = d.result_path;
+  }
+
+  if(d.comparison){
+    document.getElementById('cmpCentroid').textContent=(d.comparison.centroid?.toFixed(2)||'—')+' mm';
+    document.getElementById('cmpSkeleton').textContent=(d.comparison.skeleton?.toFixed(2)||'—')+' mm';
+    const agree=d.comparison.agree?'AGREE':'DISAGREE';
+    document.getElementById('cmpAgree').textContent=agree;
+    document.getElementById('cmpAgree').className='cval '+(d.comparison.agree?'agree':'disagree');
+    document.getElementById('compareBlock').classList.add('show');
+  }else{
+    document.getElementById('compareBlock').classList.remove('show');
+  }
+
+  const tg=document.getElementById('tileGrid');
+  if(d.tile_results && d.tile_results.length>0){
+    tg.innerHTML='';
+    d.tile_results.forEach((t,i)=>{
+      const tc=document.createElement('div');
+      tc.className='tile-card '+(t.status||'unknown').toLowerCase();
+      tc.innerHTML=`
+        <div class="tile-id">TILE ${i+1}</div>
+        <div class="tile-status ${(t.status||'unknown').toLowerCase()}">${t.status||'—'}</div>
+        <div class="tile-detail">Width: ${t.width?.toFixed(1)||'—'}mm</div>
+        <div class="tile-detail">Align: ${t.alignment_deviation?.toFixed(1)||'—'}mm</div>
+      `;
+      tg.appendChild(tc);
+    });
+    document.getElementById('tileCount').textContent=d.tile_results.length+' tiles';
+  }else{
+    tg.innerHTML='<div class="tile-ph" style="grid-column:1/-1">No tile data</div>';
+    document.getElementById('tileCount').textContent='0 tiles';
+  }
+}
+
+async function loadHistory(){
+  try{
+    const r=await fetch('/api/history');
+    const d=await r.json();
+    histData=d;
+    const tb=document.getElementById('histBody');
+    if(d.length===0){
+      tb.innerHTML='<tr><td colspan="8" style="color:var(--muted);text-align:center;padding:1.5rem">No inspections yet</td></tr>';
+      return;
+    }
+    tb.innerHTML=d.map(h=>`
+      <tr onclick='reviewHistory(${h.id})'>
+        <td>${h.id}</td>
+        <td>${h.timestamp.split('T')[1].split('.')[0]}</td>
+        <td>${h.method.toUpperCase()}</td>
+        <td><span class="badge ${h.status.toLowerCase()}">${h.status}</span></td>
+        <td>${h.deviation_mm?.toFixed(1)||'—'}</td>
+        <td>${h.width_mm?.toFixed(1)||'—'}</td>
+        <td>${h.tiles_count||'—'}</td>
+        <td>${h.source||'—'}</td>
+      </tr>
+    `).join('');
+  }catch(e){}
+}
+
+function reviewHistory(id){
+  const h=histData.find(x=>x.id===id);
+  if(!h)return;
+  updateResult(h);
+}
+
+async function runFullGridAnalysis() {
+    setLoading(true);
+    showToast('', `Running ${activeMethod} analysis on grid...`);
+
+    try {
+        const response = await fetch('/api/floorplan/generate_analysis_grid', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ method: activeMethod })
+        });
+        const data = await response.json();
+
+        if (data.ok) {
+            const img = document.getElementById('rimg');
+            img.src = data.path + '?t=' + Date.now();
+            img.style.display = 'block';
+            document.getElementById('rimgPh').style.display = 'none';
+            if (typeof openImage === "function") openImage();
+            showToast('pass', 'Analysis Grid Completed!');
+        } else {
+            showToast('fail', data.error);
+        }
+    } catch (err) {
+        showToast('fail', 'Error connecting to server');
+    }
+    setLoading(false);
+}
+
+async function loadStats(){
+  try{
+    const r=await fetch('/api/stats');
+    const d=await r.json();
+    updateStats(d);
+  }catch(e){}
+}
+function updateStats(d){
+  document.getElementById('stTotal').textContent=d.total;
+  document.getElementById('stPass').textContent =d.pass;
+  document.getElementById('stFail').textContent =d.fail;
+}
+
+async function clearHist(){
+  await fetch('/api/clear_history',{method:'POST'});
+  loadHistory(); loadStats();
+  showToast('','History cleared');
+}
+
+async function sendRobotCommand(action) {
+  const endpoint = action === 'start' ? '/api/robot/auto_start' : '/api/robot/auto_stop';
+
+  // Read the grid size from grid-size selector
+  let sizeSelector = document.getElementById("gridSizeSelector");
+  let size = sizeSelector ? sizeSelector.value : 3; // Default to 3 if something goes wrong
+
+  // Grab the Live Angles from the input boxes
+  const r1 = document.getElementById('angR1').value;
+  const r2 = document.getElementById('angR2').value;
+  const l1 = document.getElementById('angL1').value;
+  const l2 = document.getElementById('angL2').value;
+
+  try {
+    const r = await fetch(endpoint, {
+        method: 'POST',
+        headers:{'Content-Type':'application/json'},
+        // Send the size AND the angles to Python all at once!
+        body: JSON.stringify({
+            method: 'mapping_only',
+            rows: size,
+            cols: size,
+            r1: r1,
+            r2: r2,
+            l1: l1,
+            l2: l2
+        })
+    });
+    const d = await r.json();
+
+    if (d.error) {
+        showToast('fail', d.error);
+    } else {
+        showToast('pass', d.msg);
+        // Reset the photo count when starting a new grid
+        if (action === 'start') {
+            document.getElementById('roboCount').textContent = `Mapped: 0 Photos`;
+        }
+    }
+  } catch (err) {
+    showToast('fail', 'Failed to send command. Check Python console.');
+  }
+}
+
+// Compass Calibration Function
+async function calibrateCompass() {
+  try {
+    const r = await fetch('/api/robot/calibrate_compass', { method: 'POST' });
+    const d = await r.json();
+    if (d.error) {
+      showToast('fail', d.error);
+    } else {
+      showToast('', d.msg);
+    }
+  } catch (err) {
+    showToast('fail', 'Failed to send calibration command');
+  }
+}
+
+function updateRobotUI(d){
+  const dot  =document.getElementById('roboDot');
+  const lbl  =document.getElementById('roboLabel');
+  const cnt  =document.getElementById('roboCount');
+  if(d.running){
+    dot.classList.add('active');
+    lbl.textContent='RUNNING';
+    lbl.style.color='var(--pass)';
+  } else {
+    dot.classList.remove('active');
+    lbl.textContent='IDLE';
+    lbl.style.color='';
+  }
+  cnt.textContent='Inspections: '+(d.count||0);
+}
+
+async function generateMap(type) {
+  setLoading(true);
+  try {
+    // Switch endpoint based on button clicked
+    let endpoint = (type === 'analysis') ? '/api/floorplan/analysis_grid' : '/api/floorplan/grid';
+    if (type === 'stitch') endpoint = '/api/floorplan/stitch';
+
+    const r = await fetch(endpoint, { method: 'POST' });
+    const d = await r.json();
+
+    if (d.ok) {
+      const img = document.getElementById('rimg');
+      img.src = d.path + '?t=' + Date.now(); // Cache busting
+      img.style.display = 'block';
+      document.getElementById('rimgPh').style.display = 'none';
+      openImage(); // Show the full 3x3 inspection map
+    } else {
+      showToast('fail', d.error || 'Analyse the captured tiles first.');
+    }
+  } catch (err) { showToast('fail', 'Map generation error'); }
+  setLoading(false);
+}
+
+function openSettings() {document.getElementById('settingsModal').classList.add('open')}
+function closeSettings(){document.getElementById('settingsModal').classList.remove('open')}
+async function saveSettings(){
+  const url=document.getElementById('inputUrl').value;
+  try{
+    await fetch('/api/set_camera',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url})
+    });
+    document.getElementById('camFeed').src='/video_feed?t='+Date.now();
+    closeSettings();
+    showToast('','Settings saved — reconnecting camera...');
+  }catch(e){showToast('fail','Save failed')}
+}
+async function analyzeSelected() {
+    // If no image is selected, we use the last one mapped
+    if(!selectedImagePath) {
+        showToast('fail', 'No image selected for analysis!');
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const response = await fetch('/api/detect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                image_path: selectedImagePath,
+                method: activeMethod // Use the method from the active tab
+            })
+        });
+        const data = await response.json();
+        if (!response.ok || data.error) {
+            showToast('fail', data.error || 'Analysis failed');
+            return;
+        }
+        updateResult(data);
+        showToast('pass', 'Analysis Complete!');
+    } catch(e) {
+        showToast('fail', 'Analysis Error');
+    } finally {
+        setLoading(false);
+    }
+}
+function openImage() {
+  const img = document.getElementById('rimg');
+  if (img.style.display !== 'none' && img.src) {
+    document.getElementById('largeImage').src = img.src;
+    document.getElementById('imageViewerModal').classList.add('open');
+  }
+}
+function closeImage(e) {
+  if (e.target.id === 'imageViewerModal' || e.target.id === 'largeImage') {
+    document.getElementById('imageViewerModal').classList.remove('open');
+  }
+}
+
+function showToast(type, msg){
+  const c=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast '+(type||'');
+  t.textContent=msg;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(),4000);
+}
+
+function setLoading(on){ document.getElementById('spin').style.display=on?'block':'none'; }
+
+window.onload=()=>{loadHistory();loadStats()};
+</script>
+</body>
+</html>
